@@ -48,6 +48,10 @@ contract Competitions{
         require(msg.sender == owner);
         _;
     }
+    modifier timeTested (Submission sub) {
+    	require(sub.expirationTime < now);
+	_;
+    }
 
     /**
     @dev Initializer. Can only be called once.
@@ -71,11 +75,12 @@ contract Competitions{
         newSub.upvoteTotal = amount;
         newSub.downvoteTotal = 0;
         newSub.submittedData = givenData;
+	newsub.expirationTime = now + 604800;
         newsub.promoters.push(msg.sender);
         balances[msg.sender] += amount;
     }
     
-    function removeListing(Submission listing) submitterOnly(listing) public {
+    function removeListing(Submission listing) submitterOnly(listing) timeTested(listing) public {
         for (uint i = 0 ; i < listing.promoters.length ; i++){
             token.transfer(listing.promoters[i], balances[listing.promoters[i]]);
         }
@@ -89,14 +94,14 @@ contract Competitions{
         }
     }
     
-    function upvote(Submission listing, uint amount) public payable{
+    function upvote(Submission listing, uint amount) timeTested(listing) public payable{
 	    token.transferFrom(msg.sender, this, amount);
 	    listing.promoters.push(msg.sender);
 	    listing.balances[msg.sender] += amount;
 	    
     }
 
-    function downvote(Submission listing, uint amount) public payable{
+    function downvote(Submission listing, uint amount) timeTested(listing) public payable{
 	    token.transferFrom(msg.sender, this, amount);
 	    listing.challengers.push(msg.sender);
 	    Listing.balances[msg.sender] += amount;
