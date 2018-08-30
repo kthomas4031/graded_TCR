@@ -1,8 +1,6 @@
-pragma solidity ^0.4.21;
-
+pragma solidity 0.4.21;
 import "tokens/eip20/EIP20Interface.sol";
 import "./Parameterizer.sol";
-import "zeppelin/math/SafeMath.sol";
 
 contract Competitions{
     
@@ -12,8 +10,6 @@ contract Competitions{
     event _SubmissionDenied(string indexed listingHash);
     event _ListingSubmitted(string indexed listingHash);
     event _ListingRemoved(string indexed listingHash);
-    
-    using SafeMath for uint;
 
     struct Submission{
         address submitter; //Include submitter and initial token stake as first TokenStake
@@ -35,35 +31,33 @@ contract Competitions{
     string name;
     
     //Constructor
-    function Competitions(){
+    function Competitions() public{
         owner = msg.sender;
     }
     
     //Modifiers
     modifier submitterOnly (Submission sub) {
-        require(msg.sender == sub.submitter || msg.sender == owner);
+        require(msg.sender == sub.submitter || msg.sender == owner, "Invalid Credentials");
         _;
     }
     modifier ownerOnly {
-        require(msg.sender == owner);
+        require(msg.sender == owner, "You are not the owner.");
         _;
     }
     modifier timeTested (Submission sub) {
-    	require(sub.expirationTime < now);
-	_;
+        require(sub.expirationTime < now, "Expiration time has passed.");
+        _;
     }
 
     /**
     @dev Initializer. Can only be called once.
     @param _token The address where the ERC20 token contract is deployed
     */
-    function init(address _token, address _voting, address _parameterizer, string _name) public {
-        require(_token != 0 && address(token) == 0);
-        require(_voting != 0 && address(voting) == 0);
-        require(_parameterizer != 0 && address(parameterizer) == 0);
+    function init(address _token, address _parameterizer, string _name) public {
+        require(_token != 0 && address(token) == 0, "Token provided invalid");
+        require(_parameterizer != 0 && address(parameterizer) == 0, "Parameterizer contract invalid");
 
         token = EIP20Interface(_token);
-        voting = PLCRVoting(_voting);
         parameterizer = Parameterizer(_parameterizer);
         name = _name;
     }
@@ -75,7 +69,7 @@ contract Competitions{
         newSub.upvoteTotal = amount;
         newSub.downvoteTotal = 0;
         newSub.submittedData = givenData;
-	newsub.expirationTime = now + 604800;
+        newsub.expirationTime = now + 604800;
         newsub.promoters.push(msg.sender);
         balances[msg.sender] += amount;
     }
@@ -84,8 +78,8 @@ contract Competitions{
         for (uint i = 0 ; i < listing.promoters.length ; i++){
             token.transfer(listing.promoters[i], balances[listing.promoters[i]]);
         }
-        for (uint i = 0 ; i < listing.challengers.length, i++){
-            token.transfer( listing.challengers[i], balances[listing.challengers[i]]);
+        for (uint i = 0 ; i < listing.challengers.length; i++){
+            token.transfer(listing.challengers[i], balances[listing.challengers[i]]);
         }
         for (uint i = 0 ; i < submissionsArray.length ; i++){
             if (submissionsArray[i] == listing){
@@ -94,17 +88,17 @@ contract Competitions{
         }
     }
     
-    function upvote(Submission listing, uint amount) timeTested(listing) public payable{
-	    token.transferFrom(msg.sender, this, amount);
-	    listing.promoters.push(msg.sender);
-	    listing.balances[msg.sender] += amount;
+    function upvote(Submission listing, uint amount) public timeTested(listing) payable{
+        token.transferFrom(msg.sender, this, amount);
+        listing.promoters.push(msg.sender);
+        listing.balances[msg.sender] += amount;
 	    
     }
 
-    function downvote(Submission listing, uint amount) timeTested(listing) public payable{
-	    token.transferFrom(msg.sender, this, amount);
-	    listing.challengers.push(msg.sender);
-	    Listing.balances[msg.sender] += amount;
+    function downvote(Submission listing, uint amount) public timeTested(listing) payable{
+        token.transferFrom(msg.sender, this, amount);
+        listing.challengers.push(msg.sender);
+        listing.balances[msg.sender] += amount;
     }
     
     function calculateVotes() public ownerOnly {
