@@ -1,6 +1,5 @@
 pragma solidity 0.4.21;
 import "tokens/eip20/EIP20Interface.sol";
-import "./Parameterizer.sol";
 
 contract Competitions{
     
@@ -16,7 +15,7 @@ contract Competitions{
         uint expirationTime;
         uint128 upvoteTotal;
         uint128 downvoteTotal;
-        string submittedData;
+        bytes32 submittedDataHash;
         address[] promoters;
         address[] challengers;
         mapping( address => uint ) balances;
@@ -27,7 +26,6 @@ contract Competitions{
     //mapping( uint =>Submission ) submissionsArray; //Option
     Submission[] submissionsArray; //Serves as the submissionID for all submissions in contract
     EIP20Interface token;
-    Parameterizer parameterizer;
     string name;
     
     //Constructor
@@ -53,23 +51,21 @@ contract Competitions{
     @dev Initializer. Can only be called once.
     @param _token The address where the ERC20 token contract is deployed
     */
-    function init(address _token, address _parameterizer, string _name) public {
+    function init(address _token, string _name) public {
         require(_token != 0 && address(token) == 0, "Token provided invalid");
-        require(_parameterizer != 0 && address(parameterizer) == 0, "Parameterizer contract invalid");
 
         token = EIP20Interface(_token);
-        parameterizer = Parameterizer(_parameterizer);
         name = _name;
     }
     
-    function addSubmission(string givenData, uint amount) public payable{
+    function addSubmission(bytes32 givenDataHash, uint amount) public payable{
         Submission newSub;
         token.transferFrom(msg.sender, this, amount);
         newSub.submitter = msg.sender;
         newSub.upvoteTotal = amount;
         newSub.downvoteTotal = 0;
-        newSub.submittedData = givenData;
-        newsub.expirationTime = now + 604800;
+        newSub.submittedDataHash = givenDataHash;
+        newsub.expirationTime = now + 604800; //set exipration after one week (could make adjustable)
         newsub.promoters.push(msg.sender);
         balances[msg.sender] += amount;
     }
