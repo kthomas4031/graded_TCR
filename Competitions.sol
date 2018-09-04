@@ -27,6 +27,7 @@ contract Competitions{
     Submission[] submissionsArray; //Serves as the submissionID for all submissions in contract
     EIP20Interface token;
     string name;
+    uint minValue;
     
     //Constructor
     function Competitions() public{
@@ -56,9 +57,11 @@ contract Competitions{
 
         token = EIP20Interface(_token);
         name = _name;
+    	uint minValue = ;
     }
     
     function addSubmission(bytes32 givenDataHash, uint amount) public payable{
+    	require(amount >= minDeposit);
         Submission newSub;
         token.transferFrom(msg.sender, this, amount);
         newSub.submitter = msg.sender;
