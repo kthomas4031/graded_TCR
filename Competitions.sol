@@ -23,8 +23,8 @@ contract Competitions{
     
     // Global Variables
     address owner;
-    //mapping( uint =>Submission ) submissionsArray; //Option
-    Submission[] submissionsArray; //Serves as the submissionID for all submissions in contract
+    mapping( bytes32 => Submission ) submissionsMapping; //Ensures uniqueness of submissions
+    bytes32[] submissionsArray; //Indexes mapping
     EIP20Interface token;
     string name;
     uint minValue;
@@ -61,7 +61,7 @@ contract Competitions{
     }
     
     function addSubmission(bytes32 givenDataHash, uint amount) public payable{
-    	require(amount >= minDeposit);
+    	require(amount >= minDeposit && submissionsMapping[givenDataHash] == 0);
         Submission newSub;
         token.transferFrom(msg.sender, this, amount);
         newSub.submitter = msg.sender;
@@ -71,6 +71,8 @@ contract Competitions{
         newsub.expirationTime = now + 604800; //set exipration after one week (could make adjustable)
         newsub.promoters.push(msg.sender);
         balances[msg.sender] += amount;
+	submissionsMapping[givenDataHash] = newSub;
+	submissionsArray.push(givenDataHash);
     }
     
     function removeListing(Submission listing) submitterOnly(listing) timeTested(listing) public {
@@ -81,8 +83,9 @@ contract Competitions{
             token.transfer(listing.challengers[i], balances[listing.challengers[i]]);
         }
         for (uint i = 0 ; i < submissionsArray.length ; i++){
-            if (submissionsArray[i] == listing){
-                delete submissionsArray[i];
+            if (submissionsMapping[submissionsArray[i]] == listing){
+                submissionsMapping[submissionsArray[i]] = 0;
+		delete submissionsArray[i];
             }
         }
     }
@@ -100,15 +103,18 @@ contract Competitions{
         listing.balances[msg.sender] += amount;
     }
     
+    //May need changed. Possibly make this run daily and add Boolean to struct to say whether it's been calculated or not
     function calculateVotes() public ownerOnly {
         for (uint i = 0 ; i < submissionsArray.length ; i++){
-            if (submissionsArray[i].upvoteTotal > downvoteTotal){
-                submissionPublished(submissionsArray[i]);
-            } else if (submissionsArray[i].downvoteTotal > upvoteTotal) {
-                submissionRejected(submissionsArray[i]);
-            } else {
-                
-            }
+		if (submissionsMapping[submissionsArray[i]].expirationTime > now){
+		    if (submissionsMapping[submissionsArray[i]].upvoteTotal > downvoteTotal){
+			submissionPublished(submissionsMapping[submissionsArray[i]]);
+		    } else if (submissionsMapping[submissionsArray[i]].downvoteTotal > upvoteTotal) {
+			submissionRejected(submissionsMapping[submissionsArray[i]]);
+		    } else {
+
+		    }
+		}
         }
     }
     
