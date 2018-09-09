@@ -1,5 +1,5 @@
 pragma solidity 0.4.21;
-import "github.com/ConsenSys/Tokens/blob/master/contracts/eip20/EIP20Interface.sol";
+import "http://github.com/ConsenSys/Tokens/blob/master/contracts/eip20/EIP20Interface.sol";
 
 contract Registry {
     event _UpvoteCast(address upvoter, uint amount);
@@ -63,21 +63,21 @@ contract Registry {
     
     function addSubmission(bytes32 givenDataHash, uint amount) public payable {
         //Validate that the submitter has met the minimum deposit and that they aren't submitting a previously used answer
-        require(amount >= minDeposit && submissionsMapping[givenDataHash] == 0);
+        require(amount >= minDeposit && submissionsMapping[givenDataHash] == 0, "Minimum Deposit not met");
         token.transferFrom(msg.sender, this, amount);
         
         //set exipration after one week (could make adjustable)
         Submission newSub = Submission({submitter: msg.sender, upvoteTotal: amount, downvoteTotal: 0, submittedDataHash: givenDataHash, completed: false});
-        newSub.expirationTime = now + 604800
+        newSub.expirationTime = now + 604800;
         newSub.promoters.push(msg.sender);
         newSub.balances[msg.sender] += amount;
         
         submissionsMapping[givenDataHash] = newSub;
         submissionsArray.push(givenDataHash);
-        emit(_ListingSubmitted(givenDataHash));
+        emit _ListingSubmitted(givenDataHash);
     }
 
-    function removeListing(Submission listing) submitterOnly(listing) timeTested(listing) public {
+    function removeListing(Submission listing) public submitterOnly(listing) timeTested(listing) {
         for (uint i = 0 ; i < listing.promoters.length ; i++) {
             token.transfer(listing.promoters[i], balances[listing.promoters[i]]);
         }
@@ -90,21 +90,21 @@ contract Registry {
                 delete submissionsArray[i];
             }
         }
-        emit(_ListingRemoved(listing.submittedDataHash));
+        emit _ListingRemoved(listing.submittedDataHash);
     }
     
     function upvote(Submission listing, uint amount) public timeTested(listing) payable {
         token.transferFrom(msg.sender, this, amount);
         listing.promoters.push(msg.sender);
         listing.balances[msg.sender] += amount;
-        emit(_UpvoteCast(msg.sender, amount));
+        emit _UpvoteCast(msg.sender, amount);
     }
 
     function downvote(Submission listing, uint amount) public timeTested(listing) payable {
         token.transferFrom(msg.sender, this, amount);
         listing.challengers.push(msg.sender);
         listing.balances[msg.sender] += amount;
-        emit(_DownvoteCast(msg.sender, amount));
+        emit _DownvoteCast(msg.sender, amount);
     }
     
     //Run daily from javascript code
@@ -130,7 +130,7 @@ contract Registry {
         }
         winner.completed = true;
         balances = 0;
-        emit(_SubmissionPassed(winner.submittedDataHash));
+        emit _SubmissionPassed(winner.submittedDataHash);
     }
     
     function submissionReject(Submission loser) internal {
@@ -146,7 +146,7 @@ contract Registry {
             }
         }
         balances = 0;
-        emit(_SubmissionDenied(loser.submittedDataHash));
+        emit _SubmissionDenied(loser.submittedDataHash);
     }
     
     function getAllHashes() public view returns(bytes32[] allListings) {
