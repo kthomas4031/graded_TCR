@@ -64,7 +64,7 @@ contract Registry {
     
     function addSubmission(bytes32 givenDataHash, uint amount) public payable {
         //Validate that the submitter has met the minimum deposit and that they aren't submitting a previously used answer
-        require(amount >= minDeposit && submissionsMapping[givenDataHash].exists == false, "Minimum Deposit not met");
+        require(amount >= minDeposit && submissionsMapping[givenDataHash].exists == false, "Minimum Deposit not met or submission already exists");
         token.transferFrom(msg.sender, this, amount);
         
         //set exipration after one week (could make adjustable)
@@ -121,7 +121,7 @@ contract Registry {
     //Run daily from javascript code
     function calculateVotes() public {
         for (uint i = 0 ; i < submissionsArray.length ; i++) {
-            if (submissionsMapping[submissionsArray[i]].expirationTime > now) {
+            if (submissionsMapping[submissionsArray[i]].expirationTime > now && submissionsMapping[submissionsArray[i]].completed == false) {
                 if (submissionsMapping[submissionsArray[i]].upvoteTotal > submissionsMapping[submissionsArray[i]].downvoteTotal) {
                     submissionPublish(submissionsArray[i]);
                 } else if (submissionsMapping[submissionsArray[i]].downvoteTotal > submissionsMapping[submissionsArray[i]].upvoteTotal) {
