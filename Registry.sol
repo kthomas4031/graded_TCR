@@ -64,7 +64,7 @@ contract Registry {
     
     function addSubmission(bytes32 givenDataHash, uint amount) public payable {
         //Validate that the submitter has met the minimum deposit and that they aren't submitting a previously used answer
-        require(amount >= minDeposit && submissionsMapping[givenDataHash].exists, "Minimum Deposit not met");
+        require(amount >= minDeposit && submissionsMapping[givenDataHash].exists == false, "Minimum Deposit not met");
         token.transferFrom(msg.sender, this, amount);
         
         //set exipration after one week (could make adjustable)
