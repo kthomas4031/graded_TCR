@@ -1,5 +1,5 @@
-pragma solidity 0.4.21;
-import "http://github.com/ConsenSys/Tokens/blob/master/contracts/eip20/EIP20Interface.sol";
+pragma solidity 0.4.24;
+import "http://github.com/ConsenSys/Tokens/contracts/eip20/EIP20Interface.sol";
 
 contract Registry {
     event _UpvoteCast(address upvoter, uint amount);
@@ -17,8 +17,9 @@ contract Registry {
         bytes32 submittedDataHash; //
         address[] promoters;
         address[] challengers;
-        mapping( address => uint ) balances;
+        mapping(address => uint) balances;
         bool completed;
+        bool exists;
     }
     
     // Global Variables
@@ -63,12 +64,18 @@ contract Registry {
     
     function addSubmission(bytes32 givenDataHash, uint amount) public payable {
         //Validate that the submitter has met the minimum deposit and that they aren't submitting a previously used answer
-        require(amount >= minDeposit && submissionsMapping[givenDataHash] == 0, "Minimum Deposit not met");
+        require(amount >= minDeposit && submissionsMapping[givenDataHash].exists, "Minimum Deposit not met");
         token.transferFrom(msg.sender, this, amount);
         
         //set exipration after one week (could make adjustable)
-        Submission newSub = Submission({submitter: msg.sender, upvoteTotal: amount, downvoteTotal: 0, submittedDataHash: givenDataHash, completed: false});
+        Submission newSub;
+        newSub.submitter = msg.sender;
+        newSub.upvoteTotal = amount;
+        newSub.downvoteTotal = 0;
+        newSub.submittedDataHash = givenDataHash;
+        newSub.completed = false;
         newSub.expirationTime = now + 604800;
+        newSub.exists = true;
         newSub.promoters.push(msg.sender);
         newSub.balances[msg.sender] += amount;
         
@@ -77,76 +84,76 @@ contract Registry {
         emit _ListingSubmitted(givenDataHash);
     }
 
-    function removeListing(Submission listing) public submitterOnly(listing) timeTested(listing) {
-        for (uint i = 0 ; i < listing.promoters.length ; i++) {
-            token.transfer(listing.promoters[i], balances[listing.promoters[i]]);
+    function removeListing(bytes32 listingHash) public submitterOnly(submissionsMapping[listingHash]) timeTested(submissionsMapping[listingHash]) {
+        for (uint i = 0 ; i < submissionsMapping[listingHash].promoters.length ; i++) {
+            uint share = submissionsMapping[listingHash].balances[submissionsMapping[listingHash].promoters[i]];
+            submissionsMapping[listingHash].balances[submissionsMapping[listingHash].promoters[i]] = 0;
+            token.transfer(submissionsMapping[listingHash].promoters[i], share);
         }
-        for (uint i = 0 ; i < listing.challengers.length; i++) {
-            token.transfer(listing.challengers[i], balances[listing.challengers[i]]);
+        for (i = 0 ; i < submissionsMapping[listingHash].challengers.length; i++) {
+            share = submissionsMapping[listingHash].balances[submissionsMapping[listingHash].challengers[i]];
+            submissionsMapping[listingHash].balances[submissionsMapping[listingHash].challengers[i]] = 0;
+            token.transfer(submissionsMapping[listingHash].challengers[i], submissionsMapping[listingHash].balances[submissionsMapping[listingHash].challengers[i]]);
         }
-        for (uint i = 0 ; i < submissionsArray.length ; i++) {
-            if (submissionsMapping[submissionsArray[i]].submittedDataHash == listing.submittedDataHash) {
-                submissionsMapping[submissionsArray[i]] = 0;
+        for (i = 0 ; i < submissionsArray.length ; i++) {
+            if (submissionsMapping[submissionsArray[i]].submittedDataHash == submissionsMapping[listingHash].submittedDataHash) {
+                submissionsMapping[submissionsArray[i]].exists = false;
                 delete submissionsArray[i];
             }
         }
-        emit _ListingRemoved(listing.submittedDataHash);
+        emit _ListingRemoved(submissionsMapping[listingHash].submittedDataHash);
     }
     
-    function upvote(Submission listing, uint amount) public timeTested(listing) payable {
+    function upvote(bytes32 listingHash, uint amount) public timeTested(submissionsMapping[listingHash]) payable {
         token.transferFrom(msg.sender, this, amount);
-        listing.promoters.push(msg.sender);
-        listing.balances[msg.sender] += amount;
+        submissionsMapping[listingHash].promoters.push(msg.sender);
+        submissionsMapping[listingHash].balances[msg.sender] += amount;
         emit _UpvoteCast(msg.sender, amount);
     }
 
-    function downvote(Submission listing, uint amount) public timeTested(listing) payable {
+    function downvote(bytes32 listingHash, uint amount) public timeTested(submissionsMapping[listingHash]) payable {
         token.transferFrom(msg.sender, this, amount);
-        listing.challengers.push(msg.sender);
-        listing.balances[msg.sender] += amount;
+        submissionsMapping[listingHash].challengers.push(msg.sender);
+        submissionsMapping[listingHash].balances[msg.sender] += amount;
         emit _DownvoteCast(msg.sender, amount);
     }
     
     //Run daily from javascript code
-    function calculateVotes() public view {
+    function calculateVotes() public {
         for (uint i = 0 ; i < submissionsArray.length ; i++) {
             if (submissionsMapping[submissionsArray[i]].expirationTime > now) {
-                if (submissionsMapping[submissionsArray[i]].upvoteTotal > downvoteTotal) {
-                    submissionPublish(submissionsMapping[submissionsArray[i]]);
-                } else if (submissionsMapping[submissionsArray[i]].downvoteTotal > upvoteTotal) {
-                    submissionReject(submissionsMapping[submissionsArray[i]]);
+                if (submissionsMapping[submissionsArray[i]].upvoteTotal > submissionsMapping[submissionsArray[i]].downvoteTotal) {
+                    submissionPublish(submissionsArray[i]);
+                } else if (submissionsMapping[submissionsArray[i]].downvoteTotal > submissionsMapping[submissionsArray[i]].upvoteTotal) {
+                    submissionReject(submissionsArray[i], i);
                 } else {
-                    removeListing(submissionsMapping[submissionsArray[i]]);
+                    removeListing(submissionsArray[i]);
                 }
             }
         }
     }
     
-    function submissionPublish(Submission winner) internal {
-        for (uint i = 0 ; i < winner.promoters.length ; i++) {
-            uint ratio = ((balances[winner.promoters[i]]*100) / (winner.upvoteTotal*100));
-            uint amountWon = (ratio*(winner.downvoteTotal*100));
-            token.transfer(winner.promoters[i], (amountWon/100));
+    function submissionPublish(bytes32 listingHash) internal {
+        for (uint i = 0 ; i < submissionsMapping[listingHash].promoters.length ; i++) {
+            uint ratio = ((submissionsMapping[listingHash].balances[submissionsMapping[listingHash].promoters[i]]*100) / (submissionsMapping[listingHash].upvoteTotal*100));
+            uint amountWon = (ratio*(submissionsMapping[listingHash].downvoteTotal*100));
+            token.transfer(submissionsMapping[listingHash].promoters[i], (amountWon/100));
+            submissionsMapping[listingHash].balances[submissionsMapping[listingHash].promoters[i]] = 0;
         }
-        winner.completed = true;
-        balances = 0;
-        emit _SubmissionPassed(winner.submittedDataHash);
+        submissionsMapping[listingHash].completed = true;
+        
+        emit _SubmissionPassed(submissionsMapping[listingHash].submittedDataHash);
     }
     
-    function submissionReject(Submission loser) internal {
-        for (uint i = 0 ; i < loser.challengers.length ; i++) {
-            uint ratio = ((balances[loser.challengers[i]]*100) / (loser.downvoteTotal*100));
-            uint amountWon = (ratio*(loser.upvoteTotal*100));
-            token.transfer(loser.challengers[i], (amountWon/100));
+    function submissionReject(bytes32 listingHash, uint g) internal {
+        for (uint i = 0 ; i < submissionsMapping[listingHash].challengers.length ; i++) {
+            uint ratio = ((submissionsMapping[listingHash].balances[submissionsMapping[listingHash].challengers[i]]*100) / (submissionsMapping[listingHash].downvoteTotal*100));
+            uint amountWon = (ratio*(submissionsMapping[listingHash].upvoteTotal*100));
+            token.transfer(submissionsMapping[listingHash].challengers[i], (amountWon/100));
+            submissionsMapping[listingHash].balances[submissionsMapping[listingHash].challengers[i]] = 0;
         }
-        for (uint i = 0 ; i < submissionsArray.length ; i++) {
-            if (submissionsMapping[submissionsArray[i]].submittedDataHash == loser.submittedDataHash){
-                submissionsMapping[submissionsArray[i]] = 0;
-                delete submissionsArray[i];
-            }
-        }
-        balances = 0;
-        emit _SubmissionDenied(loser.submittedDataHash);
+        delete submissionsArray[g];
+        emit _SubmissionDenied(submissionsMapping[listingHash].submittedDataHash);
     }
     
     function getAllHashes() public view returns(bytes32[] allListings) {
